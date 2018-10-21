@@ -5,11 +5,11 @@ import logging
 import os
 
 import click
-from matplotlib import pyplot as plt
+import pandas as pd
 
 from .architecture.secured_feeder import SecuredFeeder, simulated_annealing
-import pandas as pd
-from .io.read_files import read_files
+from .electrical_network.electrical_network import ElectricalNetwork
+from .io.read_files import read_architecture_files, read_sizing_files
 from .log_utils import CLICKVERBOSITY, set_logging_config
 
 logger = logging.getLogger(__name__)
@@ -51,7 +51,7 @@ def architecture(ctx, hv_mv_substations_filename, mv_lv_substations_filename, fe
     #
     # Read the input file
     #
-    hv_mv_substations, mv_lv_substations = read_files(hv_mv_substations_filename, mv_lv_substations_filename)
+    hv_mv_substations, mv_lv_substations = read_architecture_files(hv_mv_substations_filename, mv_lv_substations_filename)
 
     #
     # Configuration of the MV feeders
@@ -77,21 +77,42 @@ def architecture(ctx, hv_mv_substations_filename, mv_lv_substations_filename, fe
     secured_feeder = SecuredFeeder(hv_mv_substations=hv_mv_substations,
                                    mv_lv_substations=mv_lv_substations,
                                    feeders=feeders)
-    secured_feeder_opt = simulated_annealing(secured_feeder)
-    print(secured_feeder_opt.electrical_network.branches)
-    print(secured_feeder_opt.feeders)
-    plt.close('all')
-    secured_feeder_opt.display()
-    plt.show()
+    secured_feeder = simulated_annealing(secured_feeder)
+
+    # Generate the electrical network
+    electrical_network = ElectricalNetwork(buses=secured_feeder.buses, branches=secured_feeder.branches)
+    electrical_network.save(output_folder)
+
+
+@planning_tools.command(help="Perform the sizing of the electrical network based on its architecture and"
+                             "technical-economicals parameters.",
+                        epilog=EPILOG, context_settings=CONTEXT_SETTINGS)
+@click.argument('buses_filename', type=click.Path(exists=True), nargs=1)
+@click.argument('branches_filename', type=click.Path(exists=True), nargs=1)
+@click.option('--verbosity', type=CLICKVERBOSITY, help='The verbosity level. The default is \'info\'.', default='info')
+@click.option('--output-folder', '-o', type=click.Path(exists=False, file_okay=False, dir_okay=True),
+              default=None, help='The folder to export the results of the sizing. If no path is provided, the input'
+                                 'files are overwritten with the results.')
+@click.pass_context
+def sizing(ctx, buses_filename, branches_filename, verbosity, output_folder):
     #
-    # nodes = pd.read_csv('Results/secured_feeder.csv')
-    # secured_feeder_opt = SecuredFeeder(hv_mv_substations=hv_mv_substations,
-    #                                    mv_lv_substations=mv_lv_substations,
-    #                                    pairing=pairing,
-    #                                    nodes=nodes)
-    # secured_feeder_opt.optimize_feeders()
-    # secured_feeder_opt.display()
-    # plt.show()
+    # Activate the log
+    #
+    if 'verbosity' in ctx.obj:
+        verbosity = ctx.obj['verbosity']
+    if output_folder is None:
+        output_folder = os.path.dirname(buses_filename)
+    set_logging_config(verbosity=verbosity, filename=os.path.join(output_folder, 'sizing.log'))
+    logger.info('Begining of the program.')
+
+    #
+    # Read the input file
+    #
+    buses, branches = read_sizing_files(buses_filename, branches_filename)
+
+    # Generate the electrical network
+    electrical_network = ElectricalNetwork(buses=buses, branches=branches)
+    electrical_network.save(output_folder)
 
 
 if __name__ == '__main__':

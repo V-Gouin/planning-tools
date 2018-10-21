@@ -8,9 +8,9 @@ import time
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
-from ..electrical_network.electrical_network import ElectricalNetwork
 
 from .utils import tsp_solver
+from ..electrical_network.electrical_network import ElectricalNetwork
 
 logger = logging.getLogger(__name__)
 
@@ -75,9 +75,9 @@ class SecuredFeeder:
                     buses_dict['feeder'].append(x[index])
                 idx_bus += 1
             self.buses = pd.DataFrame(buses_dict)
-            self.buses = self.buses.set_index('id')
         else:
             self.buses = buses
+        self.buses = self.buses.set_index('id')
 
         # Branches
         if branches is None:
@@ -86,6 +86,7 @@ class SecuredFeeder:
             self.branches = pd.DataFrame(branches_dict)
         else:
             self.branches = branches
+        self.branches = self.branches.set_index('id')
 
         # MV feeders
         self.feeders = feeders
@@ -153,9 +154,6 @@ class SecuredFeeder:
         # Calculation of total length
         total_length = self.feeders['length'].sum()
         return total_length
-
-    def generate_electrical_network(self):
-        self.electrical_network = ElectricalNetwork(buses=self.buses, branches=self.branches)
 
     def display(self):
         figure = plt.figure()
@@ -286,7 +284,6 @@ def _elementary_change(architecture, index_substations, list_of_feeders):
     new_idx_feeder = random.choice(new_list_of_feeders)
     architecture.buses.loc[idx_substation, 'feeder'] = new_idx_feeder
     d_new = architecture.optimize_feeders(list_of_feeders=[idx_feeder, new_idx_feeder])
-    architecture.generate_electrical_network()
     logger.debug('Moving substation {} from feeder {} to {}'.format(idx_substation, idx_feeder, new_idx_feeder))
 
     return d_new, architecture, idx_substation, idx_feeder, new_idx_feeder
